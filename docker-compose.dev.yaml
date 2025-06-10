@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  spark-tts-service:
+    build:
+      context: .
+      dockerfile: dev.Dockerfile
+    image: sparktts-dev:latest
+    container_name: sparktts-dev
+    restart: always
+    runtime: nvidia
+    # 生产环境时应关闭该端口映射
+    ports:
+      - "50151:50051"
+    environment:
+      - MODEL_DIR=/app/pretrained_models/Spark-TTS-0.5B
+      - FILES_DIR=/app/files
+      - WHISPER_SIZE=small
+      - COMPUTE_TYPE=int8
+      - LANGUAGE=zh
+      - TZ=Asia/Shanghai
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - TORCH_DEBUG=1
+      - TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6"
+      - CUDA_LAUNCH_BLOCKING=1
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # 文件目录
+      - /mnt/media/data/spark_tts_data/pretrained_models:/app/pretrained_models
+      - /mnt/media/data/spark_tts_data/whisper_model:/app/whisper_model
+      # 映射除了/app/whisper_model，/app/pretrained_models以外所有的文件
+      - .:/app
+    networks:
+      - ai-platform-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    shm_size: 2gb
+
+networks:
+  ai-platform-network:
+    external: true

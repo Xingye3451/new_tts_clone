@@ -1,0 +1,27 @@
+## mysql宿主机挂载目录
+/data/mysql
+
+// 提取音频
+python grpc_client_example.py extract   --task-id test12345 --task-step 1 --server localhost:50051 --video 3-16-1.mp4
+
+// 修改音色
+python grpc_client_example.py tts  --task-id 8dfd7e87-a6b7-4d6e-9bd4-615197b6951b --task-step 1 --server localhost:50051 --voice audio_20250426_133833_3-8-2-1_8dfd7e87-a6b7-4d6e-9bd4-615197b6951b_1745645913_stepsubtitle_removal_id8dfd7e87_1745645913_no_sub_0.0s_10.0s_1745645994_voice_0.0s-5.8s_stepvoice_extraction.wav --text " 今天这条视频，新老朋友刷到了，给我全部收藏起来，仔细听我的叮嘱，接下来的天气，虽然是向阳而来，但是中途变幻莫测，稍有不慎就将望阳兴叹" --whisper-model medium  --whisper-language zh --compute-type float16 --prompt 我希望你幾天之後還記得我現在說的這番話，頂部區域需要的事
+
+
+
+            inputs = [
+                TASK_TOKEN_MAP["tts"],
+                "<|start_content|>",  # 内容开始
+                "<|prompt_text|>",  # 🔊 参考音色文本开始
+                prompt_text,
+                "<|end_prompt_text|>",  # 🔊 参考音色文本结束
+                "<|synthesis_text|>",  # 🗣️ 需要合成的目标文本开始
+                text,
+                "<|end_synthesis_text|>",  # 🗣️ 合成文本结束
+                "<|end_content|>",  # 内容结束
+                "<|start_global_token|>",
+                global_tokens,
+                "<|end_global_token|>",
+                "<|start_semantic_token|>",
+                semantic_tokens,
+            ]

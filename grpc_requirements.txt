@@ -1,0 +1,6 @@
+openai-whisper==20240930
+grpcio==1.62.1
+grpcio-tools==1.62.1
+protobuf>=3.20.0
+opencv-python==4.9.0.80
+moviepy==1.0.3

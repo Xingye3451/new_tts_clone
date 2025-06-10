@@ -1,0 +1,117 @@
+version: "3.8"
+
+services:
+  spark-tts-service:
+    build:
+      context: .
+      dockerfile: prod.Dockerfile
+    image: sparktts-run:latest
+    container_name: sparktts-prod
+    restart: always
+    runtime: nvidia
+    # 生产环境时应关闭该端口映射
+    # ports:
+    #   - "50051:50051"
+
+    # 生产环境资源限制配置
+    deploy:
+      resources:
+        limits:
+          # 限制最大内存使用 (调整为24G支持更高内存需求)
+          memory: 24G
+          # 限制CPU使用 (调整为4核心，平衡性能与资源消耗)
+          cpus: "4.0"
+        reservations:
+          # 保留最小资源 (保底12G内存)
+          memory: 12G
+          # 保底2核心CPU
+          cpus: "2.0"
+          # GPU共享配置 - 不独占整个GPU，与其他服务共享
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+
+    environment:
+      - MODEL_DIR=/app/pretrained_models/Spark-TTS-0.5B
+      - FILES_DIR=/app/files
+      - WHISPER_SIZE=small
+      - COMPUTE_TYPE=int8
+      - LANGUAGE=zh
+      - TZ=Asia/Shanghai
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - TORCH_DEBUG=0 # 生产环境关闭调试
+      - TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6"
+      - CUDA_LAUNCH_BLOCKING=0 # 生产环境关闭阻塞模式
+      # GPU共享配置 - 不指定特定GPU，让系统自动分配
+      # - CUDA_VISIBLE_DEVICES=0  # 注释掉，允许使用所有可用GPU
+      - PYTHONUNBUFFERED=1
+      # gRPC服务配置
+      - GRPC_MAX_WORKERS=15 # 最大并发任务数：在4核24G配置下支持更稳定的高并发处理
+      - GRPC_PORT=50051
+      # GPU内存共享优化配置
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:256,garbage_collection_threshold:0.6
+      - CUDA_MEMORY_FRACTION=0.3 # 降低到30%，为其他服务留出GPU内存
+      # 日志级别
+      - LOG_LEVEL=INFO
+
+    volumes:
+      # 文件目录
+      - /mnt/media/data/ai-platform/files:/app/files
+      - /mnt/media/data/spark_tts_data/pretrained_models:/app/pretrained_models
+      - /mnt/media/data/spark_tts_data/whisper_model:/app/whisper_model
+      # 添加日志目录挂载
+      - /mnt/media/data/spark_tts_data/logs:/app/logs
+
+    networks:
+      - ai-platform-network
+
+    # 生产环境健康检查优化
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s # 增加启动等待时间，因为模型加载需要时间
+
+    # 生产环境日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m" # 减小单个日志文件大小
+        max-file: "10" # 增加日志文件数量
+        compress: "true" # 启用日志压缩
+
+    # 系统资源限制
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+      memlock:
+        soft: -1
+        hard: -1
+      stack:
+        soft: 67108864
+        hard: 67108864
+
+    # 共享内存大小 (用于GPU计算，增加以配合更大内存限制)
+    shm_size: 8gb # 增加共享内存，适合更大内存配置下的GPU密集计算
+
+    # 安全配置
+    security_opt:
+      - no-new-privileges:true
+    read_only: false # 因为需要写入临时文件，不能设为只读
+
+    # 进程管理
+    init: true # 使用init进程管理
+
+    # 容器标签
+    labels:
+      - "service=spark-tts"
+      - "environment=production"
+      - "version=1.0"
+      - "maintainer=ai-platform"
+
+networks:
+  ai-platform-network:
+    external: true

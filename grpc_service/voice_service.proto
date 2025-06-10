@@ -1,0 +1,179 @@
+syntax = "proto3";
+
+package voice_service;
+
+// 任务状态枚举
+enum TaskStatus {
+  UNKNOWN = 0;       // 未知状态
+  CREATED = 1;       // 任务已创建
+  INITIALIZED = 2;   // 任务已初始化
+  PENDING = 3;       // 等待处理
+  PROCESSING = 4;    // 处理中
+  COMPLETED = 5;     // 处理完成
+  FAILED = 6;        // 处理失败
+}
+
+// 声音合成服务
+service VoiceService {
+  // 音色克隆：使用源音频的声音特征来合成目标文本的音频 - 同步处理
+  rpc CloneVoice(CloneVoiceRequest) returns (CloneVoiceResponse) {}
+  
+  // 指定音色合成：使用预设或已保存的声音来合成文本 - 同步处理
+  rpc Synthesize(SynthesizeRequest) returns (SynthesizeResponse) {}
+  
+  // 从视频中提取音频 - 同步处理
+  rpc ExtractAudioFromVideo(ExtractAudioRequest) returns (ExtractAudioResponse) {}
+  
+  // 为视频添加字幕 - 同步处理
+  rpc AddSubtitleToVideo(AddSubtitleRequest) returns (AddSubtitleResponse) {}
+}
+
+// 音色克隆请求
+message CloneVoiceRequest {
+  string audio_name = 1;    // 源音频文件名
+  string target_text = 2;   // 目标文本
+  float voice_speed = 3;    // 语音速度，默认为1.0
+  string task_id = 4;       // 任务ID（可选）
+  string task_step = 5;     // 任务步骤（可选）
+  string prompt_text = 6;   // 提示文本
+}
+
+// 音色克隆响应
+message CloneVoiceResponse {
+  string task_id = 1;           // 任务ID
+  TaskStatus status = 2;        // 任务状态
+  string message = 3;           // 状态消息
+  bool is_finished = 4;         // 是否完成
+  string output_filename = 5;   // 输出文件名称（唯一）
+  repeated TranscriptionSegment segments = 6;  // 识别结果
+}
+
+// 指定音色合成请求
+message SynthesizeRequest {
+  string text = 1;           // 要合成的文本
+  string voice_name = 2;     // 声音名称（可选）
+  float voice_speed = 3;     // 语音速度（可选）
+  string task_id = 4;        // 任务ID（可选）
+  string task_step = 5;      // 任务步骤（可选）
+  string whisper_model = 6;  // 语音识别模型（可选,默认是small，可选：tiny, base, small, medium, large-v2）
+  string whisper_language = 7; // 语音识别语言（可选，默认是zh）
+  string compute_type = 8;   // 精度（可选，默认int8）
+  string prompt_text = 9;    // 提示文本
+}
+
+// 指定音色合成响应
+message SynthesizeResponse {
+  string task_id = 1;           // 任务ID
+  TaskStatus status = 2;        // 任务状态
+  string message = 3;           // 状态消息
+  bool is_finished = 4;         // 是否完成
+  string output_filename = 5;   // 输出文件名称（唯一）
+}
+
+// 从视频提取音频请求
+message ExtractAudioRequest {
+  string video_name = 1;    // 源视频文件路径
+  int32 sample_rate = 2;    // 采样率（可选，默认44100）
+  bool mono = 3;            // 是否单声道（可选，默认true）
+  float start_time = 4;     // 开始时间（秒），默认为0
+  float duration = 5;       // 持续时间（秒），默认为10秒，设为0表示提取到结尾
+  bool auto_detect_voice = 6; // 是否自动检测有声部分（可选，默认false）
+  float max_silence = 7;    // 最大静音时长（秒），用于自动检测（可选，默认2.0）
+  string task_id = 8;       // 任务ID（可选）
+  string task_step = 9;     // 任务步骤（可选）
+}
+
+// 从视频提取音频响应
+message ExtractAudioResponse {
+  string task_id = 1;           // 任务ID
+  TaskStatus status = 2;        // 任务状态
+  string message = 3;           // 状态消息
+  bool is_finished = 4;         // 是否完成
+  string output_filename = 5;   // 输出文件名称（唯一）
+  string prompt_text = 6;       // 生成提示文本
+}
+
+// 为视频添加字幕请求
+message AddSubtitleRequest {
+  string video_name = 1;      // 源视频文件名
+  string subtitle_text = 2;   // 字幕文本内容（纯文本，将自动与语音对齐）
+  string task_id = 3;         // 任务ID（可选）
+  string task_step = 4;       // 任务步骤（可选）
+  
+  // 字体样式参数
+  string font_name = 5;       // 字体名称（可选，默认Arial）
+                              // 🎯 容器中可用的字体选项：
+                              // 
+                              // 【英文字体】（推荐用于前端下拉选择）
+                              // - "Arial" (系统默认，兼容性最佳)
+                              // - "DejaVu Sans" (无衬线，清晰易读)
+                              // - "DejaVu Serif" (衬线字体，正式文档风格)
+                              // - "DejaVu Sans Mono" (等宽字体，代码风格)
+                              // - "Liberation Sans" (类似Arial的开源字体)
+                              // - "Liberation Serif" (类似Times的开源字体)
+                              // - "Liberation Mono" (等宽字体)
+                              // 
+                              // 【中文字体】（支持中文显示）
+                              // - "Noto Sans CJK SC" (Google Noto简体中文，推荐)
+                              // - "Noto Serif CJK SC" (Google Noto简体中文衬线)
+                              // - "WenQuanYi Zen Hei" (文泉驿正黑，开源中文字体)
+                              // - "WenQuanYi Micro Hei" (文泉驿微米黑，紧凑型中文字体)
+                              // 
+                              // 【字体文件路径】（高级用户）
+                              // - "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+                              // - "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+                              // - "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"
+                              // 
+                              // 💡 前端建议：
+                              // 1. 提供下拉选择，默认"Arial"
+                              // 2. 中英文混合内容推荐"Noto Sans CJK SC"
+                              // 3. 纯英文内容推荐"DejaVu Sans"
+                              // 4. 正式文档风格推荐"Liberation Serif"
+  
+  int32 font_size = 6;        // 字体大小（可选，默认24）
+                              // 范围: 8-128，推荐 18-48
+  
+  string font_color = 7;      // 字体颜色（可选，默认white）
+                              // 支持格式:
+                              // - 英文颜色名: white, black, red, green, blue, yellow, cyan, magenta
+                              // - 十六进制: #FFFFFF, #FF0000, #00FF00, #0000FF
+                              // - RGB值: 0xFFFFFF, 0xFF0000
+                              // - 透明度: white@0.8, #FF0000@0.5 (透明度0.0-1.0)
+                              // 注意: 请勿使用中文颜色名，FFmpeg不识别
+  
+  string background_color = 8; // 字幕背景颜色（可选，默认transparent）
+                               // 支持格式完全相同于font_color:
+                               // - 英文颜色名: white, black, red, green, blue, yellow, cyan, magenta
+                               // - 十六进制: #FFFFFF, #FF0000, #00FF00, #0000FF
+                               // - RGB值: 0xFFFFFF, 0xFF0000  
+                               // - 透明度: black@0.5, #000000@0.3 (推荐0.3-0.7)
+                               // - 特殊值: transparent (透明), none (无背景)
+  
+  bool add_border = 9;        // 是否添加边框（可选，默认true）
+                              // true: 添加黑色边框，提高可读性
+                              // false: 无边框
+  
+  string position = 10;       // 字幕位置（可选，默认bottom）
+                              // 支持值:
+                              // - bottom: 底部居中
+                              // - top: 顶部居中  
+                              // - middle: 中央
+                              // - left: 左侧
+                              // - right: 右侧
+}
+
+// 为视频添加字幕响应
+message AddSubtitleResponse {
+  string task_id = 1;           // 任务ID
+  TaskStatus status = 2;        // 任务状态
+  string message = 3;           // 状态消息
+  bool is_finished = 4;         // 是否完成
+  string output_filename = 5;   // 输出文件名称（唯一）
+}
+
+// 语音识别结果片段
+message TranscriptionSegment {
+  string text = 1;           // 识别的文本
+  float start = 2;          // 开始时间（秒）
+  float end = 3;            // 结束时间（秒）
+} 
