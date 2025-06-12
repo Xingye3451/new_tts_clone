@@ -202,8 +202,9 @@ $RECYCLE.BIN/
 # ====================
 # Pretrained models (usually large files)
 pretrained_models/
-models/
+/models/
 checkpoints/
+# 注意：不要忽略 sparktts/models/ 源代码目录
 *.pth
 *.pt
 *.bin
