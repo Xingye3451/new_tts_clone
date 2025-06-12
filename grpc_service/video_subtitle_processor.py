@@ -1021,3 +1021,139 @@ class VideoSubtitleProcessor:
                     logger.info(f"已清理临时音频文件: {audio_path}")
                 except:
                     pass
+
+    def add_auto_subtitle_to_video(
+        self,
+        video_path: str,
+        font_name: str = "Arial",
+        font_size: int = 24,
+        font_color: str = "white",
+        background_color: str = "transparent",
+        add_border: bool = True,
+        position: str = "bottom",
+        progress_callback: Optional[Callable[[int, str], None]] = None,
+    ) -> str:
+        """
+        为视频自动生成字幕（使用Whisper large-v2直接识别语音）
+
+        Args:
+            video_path: 视频文件路径
+            font_name: 字体名称
+            font_size: 字体大小 (8-128，推荐18-48)
+            font_color: 字体颜色
+            background_color: 背景颜色
+            add_border: 是否添加边框 (提高可读性)
+            position: 字幕位置
+            progress_callback: 进度回调函数
+
+        Returns:
+            处理后的视频文件路径
+        """
+        audio_path = None
+        
+        try:
+            if not os.path.exists(video_path):
+                raise FileNotFoundError(f"视频文件不存在: {video_path}")
+
+            logger.info(f"开始自动生成字幕，视频: {video_path}")
+
+            # 1. 从视频中提取音频
+            if progress_callback:
+                progress_callback(10, "正在从视频中提取音频...")
+
+            logger.info("步骤1: 从视频中提取音频")
+            audio_path = self._extract_audio_from_video(video_path)
+            
+            if not audio_path or not os.path.exists(audio_path):
+                raise RuntimeError("从视频提取音频失败")
+
+            logger.info(f"音频提取完成: {audio_path}")
+
+            # 2. 使用Whisper large-v2直接识别语音
+            if progress_callback:
+                progress_callback(30, "正在使用Whisper large-v2识别语音...")
+
+            logger.info("步骤2: 使用Whisper large-v2识别语音")
+            try:
+                # 加载Whisper模型（使用large-v2）
+                import whisper
+                model = whisper.load_model("large-v2", device="cpu")
+                
+                # 转录音频，获取详细的时间戳信息
+                result = model.transcribe(
+                    audio_path,
+                    verbose=True,
+                    word_timestamps=True,  # 启用词级时间戳
+                    language="zh"  # 可以设置为auto让它自动检测
+                )
+                
+                # 提取分段信息
+                recognition_results = []
+                for segment in result["segments"]:
+                    recognition_results.append({
+                        "text": segment["text"].strip(),
+                        "start": segment["start"],
+                        "end": segment["end"]
+                    })
+                
+                logger.info(f"Whisper识别完成，共识别到 {len(recognition_results)} 个语音片段")
+                
+                # 打印识别结果
+                for i, segment in enumerate(recognition_results[:5]):  # 只显示前5个
+                    logger.info(f"  片段 {i+1}: {segment['start']:.2f}s-{segment['end']:.2f}s: {segment['text'][:50]}...")
+                
+            except Exception as e:
+                logger.error(f"Whisper识别失败: {str(e)}")
+                raise RuntimeError(f"语音识别失败: {str(e)}")
+
+            # 3. 直接使用识别结果作为字幕片段
+            if progress_callback:
+                progress_callback(70, "正在生成字幕片段...")
+
+            logger.info("步骤3: 使用识别结果生成字幕")
+            
+            if not recognition_results:
+                raise RuntimeError("未识别到任何语音内容")
+
+            # 直接使用识别结果，不需要对齐
+            subtitle_segments = recognition_results
+            
+            # 修复可能的时间重叠问题
+            subtitle_segments = self._fix_subtitle_overlaps(subtitle_segments)
+
+            logger.info(f"字幕片段生成完成，共 {len(subtitle_segments)} 个片段")
+
+            # 4. 创建硬字幕视频
+            if progress_callback:
+                progress_callback(90, "正在生成硬字幕视频...")
+
+            logger.info("步骤4: 创建硬字幕视频")
+            output_path = self._create_hard_subtitle_video(
+                video_path=video_path,
+                subtitle_segments=subtitle_segments,
+                font_name=font_name,
+                font_size=font_size,
+                font_color=font_color,
+                background_color=background_color,
+                add_border=add_border,
+                position=position,
+                progress_callback=progress_callback,
+            )
+
+            if progress_callback:
+                progress_callback(100, "自动字幕生成完成!")
+
+            logger.info(f"自动字幕生成完成: {output_path}")
+            return output_path
+
+        except Exception as e:
+            logger.error(f"自动字幕生成失败: {str(e)}")
+            raise
+        finally:
+            # 清理临时音频文件
+            if audio_path and os.path.exists(audio_path):
+                try:
+                    os.remove(audio_path)
+                    logger.info("临时音频文件已清理")
+                except Exception as e:
+                    logger.warning(f"清理临时音频文件失败: {e}")

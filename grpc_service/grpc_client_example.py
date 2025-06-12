@@ -10,24 +10,31 @@ Spark TTS gRPC 客户端示例
 3. 视频音频提取 (extract) - 从视频中提取音频
 4. 智能硬字幕 (subtitle) - 为视频添加智能对齐的硬字幕
 
-智能硬字幕功能特点：
-- 🎯 自动语音识别：使用 Whisper 识别视频中的语音内容
+智能字幕功能特点：
+- 🎯 自动语音识别：使用 Whisper large-v3 识别视频中的语音内容
 - 🧠 智能文本对齐：将用户提供的准确文本与识别结果进行时间对齐
+- 🤖 全自动字幕：无需提供文本，直接识别语音生成字幕
 - 🎬 硬字幕生成：直接将字幕烧录到视频画面中，兼容所有播放器
-- ⚡ 零配置使用：无需手动设置时间戳，只需提供纯文本
+- ⚡ 零配置使用：无需手动设置时间戳
 
 使用示例：
-# 基本字幕添加
+# 全自动字幕生成（推荐）
+python grpc_client_example.py subtitle --video my_video.mp4
+
+# 强制自动模式（即使有文本也忽略）
+python grpc_client_example.py subtitle --video my_video.mp4 --auto
+
+# 智能对齐模式（提供准确文本）
 python grpc_client_example.py subtitle --video my_video.mp4 --text "这是要添加的字幕内容"
 
-# 自定义样式
-python grpc_client_example.py subtitle --video my_video.mp4 --text "自定义字幕" --font-size 28 --font-color yellow --position top
+# 自定义样式的自动字幕
+python grpc_client_example.py subtitle --video my_video.mp4 --font-size 28 --font-color yellow --position top
 
-# 从文件读取字幕
+# 从文件读取字幕（智能对齐）
 python grpc_client_example.py subtitle --video my_video.mp4 --subtitle-file subtitle.txt
 
-# 上传本地视频并添加字幕
-python grpc_client_example.py subtitle --upload /path/to/local_video.mp4 --video local_video.mp4 --text "字幕内容"
+# 上传本地视频并自动生成字幕
+python grpc_client_example.py subtitle --upload /path/to/local_video.mp4 --video local_video.mp4
 """
 
 import os
@@ -454,14 +461,17 @@ def run_add_subtitle(
     position="bottom",
     upload_file=None,
     subtitle_file=None,
+    auto_mode=False,
     server_address="voice-service:50051",
 ):
     """
-    为视频添加智能对齐的硬字幕（同步方式）
+    为视频添加智能字幕（同步方式）
+
+    注意: subtitle_text 参数已废弃，系统始终使用 Whisper large-v2 自动识别语音生成字幕
 
     Args:
         video_name: 视频文件名(不需要完整路径)
-        subtitle_text: 字幕文本内容（纯文本，将自动与语音对齐）
+        subtitle_text: 已废弃的参数，不再使用
         task_id: 任务ID，如果为None则自动生成
         task_step: 任务步骤，默认为None，将使用"0"
         font_name: 字体名称，默认Arial
@@ -471,6 +481,7 @@ def run_add_subtitle(
         position: 字幕位置，可选: bottom, top, middle
         upload_file: 要上传的本地视频文件路径，默认为None
         subtitle_file: 要上传的字幕文件，如果提供则使用文件内容替代subtitle_text
+        auto_mode: 是否强制使用自动识别模式，默认False
         server_address: gRPC服务器地址，默认为 'voice-service:50051'
     """
     # 如果没有指定任务ID，生成一个
@@ -491,28 +502,10 @@ def run_add_subtitle(
             video_name = uploaded_filename
             print(f"将使用上传的视频文件: {video_name}")
 
-    # 如果提供了字幕文件，读取内容
-    if subtitle_file:
-        if not os.path.exists(subtitle_file):
-            print(f"错误: 本地字幕文件不存在: {subtitle_file}")
-            return
-
-        # 读取字幕文件内容
-        try:
-            with open(subtitle_file, "r", encoding="utf-8") as f:
-                subtitle_text = f.read().strip()
-            print(f"已读取字幕文件: {subtitle_file}")
-            print(
-                f"字幕内容预览: {subtitle_text[:100]}{'...' if len(subtitle_text) > 100 else ''}"
-            )
-        except Exception as e:
-            print(f"读取字幕文件失败: {e}")
-            return
-
-    # 检查字幕文本
-    if not subtitle_text or not subtitle_text.strip():
-        print("错误: 字幕文本不能为空")
-        return
+    # 注意: subtitle_text 和相关参数已废弃，始终使用自动识别模式
+    print("🎯 使用自动识别模式: 直接用Whisper large-v2识别视频语音生成字幕")
+    print("📝 注意: subtitle_text 参数已废弃，系统将忽略所有文本输入")
+    subtitle_text = ""  # 清空字幕文本
 
     # 创建gRPC通道
     channel = grpc.insecure_channel(server_address)
@@ -538,9 +531,8 @@ def run_add_subtitle(
             request.task_step = task_step
 
         # 发送请求
-        print(f"\n🎬 发送智能硬字幕添加请求:")
+        print(f"\n🤖 发送自动字幕生成请求:")
         print(f"📹 视频文件: {video_name}")
-        print(f"📝 字幕文本长度: {len(subtitle_text)}字符")
         print(f"🎨 字体样式: {font_name}, 大小: {font_size}, 颜色: {font_color}")
         print(f"🖼️  添加边框: {'是' if add_border else '否'}")
         print(f"📍 位置: {position}")
@@ -548,16 +540,10 @@ def run_add_subtitle(
         if task_step:
             print(f"📊 任务步骤: {task_step}")
 
-        print(f"\n📄 字幕内容预览:")
-        preview_text = (
-            subtitle_text[:200] + "..." if len(subtitle_text) > 200 else subtitle_text
-        )
-        print(f"   {preview_text}")
-
-        print(f"\n⚡ 智能处理流程:")
+        print(f"\n⚡ 自动识别处理流程:")
         print(f"   1. 从视频中提取音频")
-        print(f"   2. 使用Whisper进行语音识别")
-        print(f"   3. 智能对齐用户文本与识别结果")
+        print(f"   2. 使用Whisper large-v2识别语音")
+        print(f"   3. 直接使用识别结果生成字幕")
         print(f"   4. 生成硬字幕视频")
         print(f"\n⏳ 正在处理，请稍候...")
 
@@ -706,16 +692,22 @@ if __name__ == "__main__":
 
     # 为视频添加字幕命令
     subtitle_parser = subparsers.add_parser(
-        "subtitle", help="为视频添加智能对齐的硬字幕", parents=[parent_parser]
+        "subtitle", help="为视频添加智能字幕（使用Whisper large-v2自动识别）", parents=[parent_parser]
     )
     subtitle_parser.add_argument("--video", "-v", required=True, help="视频文件名")
     subtitle_parser.add_argument(
         "--text",
         "-t",
-        help="字幕文本内容（纯文本，将自动与视频语音对齐），如果不提供则必须通过--subtitle-file指定字幕文件",
+        help="已废弃的参数，不再使用（系统始终使用Whisper large-v2自动识别）",
     )
     subtitle_parser.add_argument(
-        "--subtitle-file", "-sf", help="字幕文件路径，包含纯文本内容（不需要时间戳）"
+        "--subtitle-file", "-sf", help="已废弃的参数，不再使用（系统始终使用Whisper large-v2自动识别）"
+    )
+    subtitle_parser.add_argument(
+        "--auto",
+        "-a",
+        action="store_true",
+        help="已废弃的参数，系统默认已使用自动识别模式"
     )
     subtitle_parser.add_argument(
         "--font", "-f", default="Arial", help="字体名称，默认Arial"
@@ -780,10 +772,9 @@ if __name__ == "__main__":
             server_address=args.server,
         )
     elif args.command == "subtitle":
-        # 检查必要参数
-        if not args.text and not args.subtitle_file:
-            print("错误: 必须提供字幕文本(--text)或字幕文件(--subtitle-file)")
-            sys.exit(1)
+        # 系统已改为始终使用自动识别模式
+        print("💡 提示: 系统始终使用Whisper large-v2自动识别语音生成字幕")
+        print("💡 --text, --subtitle-file, --auto 参数已废弃")
 
         run_add_subtitle(
             video_name=args.video,
@@ -797,6 +788,7 @@ if __name__ == "__main__":
             position=args.position,
             upload_file=args.upload,
             subtitle_file=args.subtitle_file,
+            auto_mode=args.auto,
             server_address=args.server,
         )
     else:

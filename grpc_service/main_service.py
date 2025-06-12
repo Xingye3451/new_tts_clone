@@ -733,7 +733,9 @@ class VoiceServiceServicer(voice_service_pb2_grpc.VoiceServiceServicer):
 
     def AddSubtitleToVideo(self, request, context):
         """
-        为视频添加智能对齐的硬字幕 - 同步方法
+        为视频添加智能字幕 - 同步方法
+
+        注意: subtitle_text 字段已废弃，始终使用 Whisper large-v2 自动识别语音生成字幕
 
         字幕参数格式说明:
 
@@ -782,14 +784,14 @@ class VoiceServiceServicer(voice_service_pb2_grpc.VoiceServiceServicer):
         try:
             # 获取请求参数
             video_name = request.video_name
-            subtitle_text = request.subtitle_text
+            # 注意: subtitle_text 字段已废弃，不再使用
 
             # 获取或生成任务ID
             task_id = request.task_id if request.task_id else str(uuid.uuid4())
             task_step = request.task_step if request.task_step else "0"
 
             logger.info(
-                f"收到添加字幕请求 - task_id: {task_id}, video_name: {video_name}, 字幕文本长度: {len(subtitle_text)}"
+                f"收到自动字幕生成请求 - task_id: {task_id}, video_name: {video_name}, 使用 Whisper large-v2 自动识别"
             )
 
             # 获取字体样式参数（带格式验证和默认值）
@@ -877,16 +879,15 @@ class VoiceServiceServicer(voice_service_pb2_grpc.VoiceServiceServicer):
 
             try:
                 logger.info(
-                    f"开始为视频添加智能对齐硬字幕: {video_name}, 路径: {video_path}"
+                    f"开始自动生成字幕: {video_name}, 路径: {video_path}"
                 )
-
-                output_path = subtitle_processor.add_subtitle_to_video(
+                # 始终使用自动识别模式，使用 Whisper large-v2
+                output_path = subtitle_processor.add_auto_subtitle_to_video(
                     video_path=video_path,
-                    subtitle_text=subtitle_text,
                     font_name=font_name,
                     font_size=font_size,
                     font_color=font_color,
-                    background_color=background_color,  # 新增背景颜色参数
+                    background_color=background_color,
                     add_border=add_border,
                     position=position,
                 )
@@ -905,17 +906,18 @@ class VoiceServiceServicer(voice_service_pb2_grpc.VoiceServiceServicer):
 
                         shutil.move(output_path, new_output_path)
 
-                    logger.info(f"智能硬字幕添加完成，保存为: {new_output_path}")
+                    logger.info(f"自动字幕生成完成，保存为: {new_output_path}")
+                    success_message = "自动字幕生成完成（Whisper large-v2）"
 
                     return voice_service_pb2.AddSubtitleResponse(
                         task_id=task_id,
                         status=voice_service_pb2.TaskStatus.COMPLETED,
-                        message="智能硬字幕添加完成",
+                        message=success_message,
                         is_finished=True,
                         output_filename=output_filename,
                     )
                 else:
-                    error_msg = "智能硬字幕添加失败，处理器未返回有效路径"
+                    error_msg = "自动字幕生成失败，处理器未返回有效路径"
                     logger.error(error_msg)
                     return voice_service_pb2.AddSubtitleResponse(
                         task_id=task_id,
@@ -925,7 +927,7 @@ class VoiceServiceServicer(voice_service_pb2_grpc.VoiceServiceServicer):
                     )
 
             except Exception as e:
-                error_message = f"添加智能硬字幕时发生错误: {str(e)}"
+                error_message = f"自动字幕生成时发生错误: {str(e)}"
                 logger.error(error_message)
                 return voice_service_pb2.AddSubtitleResponse(
                     task_id=task_id,
